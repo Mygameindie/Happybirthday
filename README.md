@@ -22,7 +22,8 @@ directly also works, but then you can only tap the candles.
 ## Tips
 
 - If the candles go out too easily, or not at all, move the **Sensitivity** slider.
-- If you don't have a microphone, tap or click a candle to blow it out. On a computer you can also hold the **Space bar** to blow.
+- No microphone, or blowing not working? **Press and hold the cake** to blow (or hold the **Space bar** on a computer). You can also tap a single candle.
+- The bar next to "🎤" shows how loud the mic hears you. Blow past the white line. If the bar never moves, the page is not getting the microphone (check it is an https:// link and that you tapped Allow).
 - Sound is only analysed on the device. Nothing is recorded or uploaded.
 
 ## Files

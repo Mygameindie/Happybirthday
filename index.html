@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <canvas id="confetti"></canvas>
@@ -39,7 +39,7 @@
       <svg viewBox="0 0 34 56" aria-hidden="true" id="hintIcon"></svg>
       <span id="hintText">Blow at the bottom of your phone, right at the charger port 🔌</span>
     </div>
-    <div class="meter" id="meter" title="Blow strength"><div id="meterFill"></div><span id="meterMark"></span></div>
+    <div class="meter-row" id="meter"><span class="mic-label" id="micLabel">🎤 Mic</span><div class="meter" title="How loud the mic hears you. Blow past the white line."><div id="meterFill"></div><span id="meterMark"></span></div></div>
     <div class="row" id="sensRow">
       <label for="sens">Sensitivity</label>
       <input id="sens" type="range" min="1" max="10" value="8">
@@ -58,6 +58,6 @@
   <button class="ghost" id="noMicBtn">No mic? Tap the candles instead</button>
 </div>
 
-<script src="script.js?v=3"></script>
+<script src="script.js?v=4"></script>
 </body>
 </html>

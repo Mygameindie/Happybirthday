@@ -8,7 +8,7 @@
 
   const $ = id => document.getElementById(id);
   const titleEl = $('title'), statusEl = $('status');
-  const meterFill = $('meterFill'), meterMark = $('meterMark');
+  const meterFill = $('meterFill'), meterMark = $('meterMark'), micLabel = $('micLabel');
   if (name) {
     titleEl.textContent = `Happy Birthday, ${name}!`;
     $('startTitle').textContent = `A cake for ${name}!`;
@@ -29,7 +29,7 @@
   const isPhone = !isIPad && /iPhone|iPod|Android|Mobile/.test(UA);
   const isPC = !isIPad && !isPhone && !matchMedia('(pointer: coarse)').matches;
   const hintIcon = $('hintIcon'), hintText = $('hintText');
-  const tapWord = isPC ? 'click the candles or hold Space' : 'tap each candle';
+  const tapWord = isPC ? 'hold Space or hold down on the cake' : 'press and hold the cake';
 
   function drawHint() {
     const puff = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="0" fill="#7ff0d8"><animate attributeName="r" values="0;5;0" dur="1.2s" repeatCount="indefinite"/></circle>`;
@@ -40,17 +40,17 @@
         '<rect x="8" y="3" width="40" height="26" rx="3" fill="none" stroke="#d9c8ff" stroke-width="2"/>' +
         '<circle cx="28" cy="6.5" r="1.6" fill="#ffcf5a"/>' +
         '<path d="M2 33 H54 L50 37 H6 Z" fill="none" stroke="#d9c8ff" stroke-width="2" stroke-linejoin="round"/>' + puff(28, 6.5);
-      hintText.textContent = 'Blow toward your computer\'s microphone (on a laptop it\'s usually by the webcam). No mic? Hold the Space bar 🌬️';
+      hintText.textContent = 'Blow toward your computer\'s microphone (on a laptop it\'s usually by the webcam). Or hold the Space bar, or hold down on the cake 🌬️';
     } else if (isIPad) {
       hintIcon.innerHTML =
         '<rect x="3" y="2" width="28" height="52" rx="6" fill="none" stroke="#d9c8ff" stroke-width="2"/>' +
         '<circle cx="17" cy="6" r="1.6" fill="#ffcf5a"/>' + puff(17, 6);
-      hintText.textContent = 'Blow at the top edge of your iPad, near the camera. That\'s where iPad microphones are 🌬️';
+      hintText.textContent = 'Blow at the top edge of your iPad, near the camera. Or press and hold the cake 🌬️';
     } else {
       hintIcon.innerHTML =
         '<rect x="3" y="2" width="28" height="52" rx="6" fill="none" stroke="#d9c8ff" stroke-width="2"/>' +
         '<rect x="13" y="49" width="8" height="2.4" rx="1.2" fill="#ffcf5a"/>' + puff(17, 56);
-      hintText.textContent = 'Blow at the bottom of your phone, right at the charger port 🔌🌬️';
+      hintText.textContent = 'Blow at the bottom of your phone, right at the charger port 🔌 Or press and hold the cake 🌬️';
     }
   }
   if (isPC) {
@@ -91,6 +91,16 @@
     if (c && c.lit) { c.health = 0; extinguish(c); }
   });
 
+  // Press and hold anywhere on the cake = blow. A backup that always works.
+  let cakeHeld = false;
+  const cakeEl = $('cake');
+  cakeEl.addEventListener('pointerdown', e => {
+    if (celebrating || e.target.closest('.candle')) return;
+    cakeHeld = true;
+    try { cakeEl.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cakeEl.addEventListener(t, () => { cakeHeld = false; }));
+
   // ---------- audio ----------
   let audioCtx = null, analyser = null, source = null, stream = null, freq = null, waveF = null, waveB = null;
   let baseline = null, calibUntil = 0, listening = false, celebrating = false, starting = false, micWanted = false;
@@ -98,10 +108,10 @@
 
   const sens = $('sens');
   try {
-    const saved = parseInt(localStorage.getItem('cake-sens-v2'), 10);
+    const saved = parseInt(localStorage.getItem('cake-sens-v3'), 10);
     if (saved >= 1 && saved <= 10) sens.value = saved;
   } catch (e) {}
-  sens.addEventListener('input', () => { try { localStorage.setItem('cake-sens-v2', sens.value); } catch (e) {} });
+  sens.addEventListener('input', () => { try { localStorage.setItem('cake-sens-v3', sens.value); } catch (e) {} });
 
   function getCtx() {
     if (!audioCtx) {
@@ -139,7 +149,8 @@
       // If the mic is cut off (phone call, screen lock, unplugged headset), ask to turn it back on.
       stream.getAudioTracks().forEach(t => t.addEventListener('ended', onMicLost));
       baseline = null;
-      blowFrames = 0;
+      blowFrames = 0; silentFrames = 0; heardSomething = false;
+      micLabel.textContent = '🎤 Listening'; micLabel.classList.add('on');
       calibUntil = performance.now() + 900;
       listening = true;
       showMicUI(true);
@@ -152,6 +163,7 @@
   function stopMic() {
     listening = false;
     blowFrames = 0;
+    if (micLabel) micLabel.classList.remove('on');
     if (source) { try { source.disconnect(); } catch (e) {} source = null; }
     analyser = null;
     if (stream) { stream.getTracks().forEach(t => { t.removeEventListener('ended', onMicLost); t.stop(); }); stream = null; }
@@ -169,62 +181,75 @@
 
   // Coming back to the tab: wake the audio, and re-open the mic if the system closed it.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { spaceHeld = false; return; }
+    if (document.hidden) { spaceHeld = false; cakeHeld = false; return; }
     if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
     if (micWanted && !celebrating && micIsDead()) showResume();
     else if (listening) { calibUntil = performance.now() + 600; baseline = null; } // re-learn room noise
   });
 
-  // Blowing on a mic = loud, broadband, mostly low-frequency rumble.
+  // Blowing straight into a mic is simply MUCH louder than the room.
+  // So we compare loudness (in dB) with the room's own noise level, no matter what device it is.
+  let silentFrames = 0, heardSomething = false;
   function readBlow() {
-    if (!listening || !analyser || !audioCtx || audioCtx.state !== 'running') return 0;
-    analyser.getByteFrequencyData(freq);
+    if (!listening || !analyser || !audioCtx) return 0;
+    if (audioCtx.state !== 'running') { audioCtx.resume().catch(() => {}); return 0; }
 
-    let rms = 0;
+    let sum = 0, peak = 0;
     if (analyser.getFloatTimeDomainData) {
       analyser.getFloatTimeDomainData(waveF);
-      for (let i = 0; i < waveF.length; i++) rms += waveF[i] * waveF[i];
+      for (let i = 0; i < waveF.length; i++) { const v = waveF[i]; sum += v * v; if (v > peak) peak = v; else if (-v > peak) peak = -v; }
     } else { // older Safari
       analyser.getByteTimeDomainData(waveB);
-      for (let i = 0; i < waveB.length; i++) { const v = (waveB[i] - 128) / 128; rms += v * v; }
+      for (let i = 0; i < waveB.length; i++) { const v = (waveB[i] - 128) / 128; sum += v * v; if (Math.abs(v) > peak) peak = Math.abs(v); }
     }
-    rms = Math.sqrt(rms / analyser.fftSize);
+    const rms = Math.sqrt(sum / analyser.fftSize);
 
-    const hzPerBin = audioCtx.sampleRate / analyser.fftSize;
-    const lowEnd = Math.max(4, Math.round(1500 / hzPerBin));
-    const midEnd = Math.min(freq.length, Math.round(5000 / hzPerBin));
-    let low = 0, mid = 0, nz = 0;
-    for (let i = 1; i < lowEnd; i++) low += freq[i];
-    for (let i = lowEnd; i < midEnd; i++) { mid += freq[i]; if (freq[i] > 60) nz++; }
-    low /= (lowEnd - 1);
-    mid /= Math.max(1, midEnd - lowEnd);
-    const spread = nz / Math.max(1, midEnd - lowEnd);
-    const level = low * 0.75 + mid * 0.25;
+    // Some iPhones hand back pure silence (all zeros) until the audio is restarted.
+    if (peak === 0) {
+      if (++silentFrames > 120 && !heardSomething) { onMicSilent(); return 0; }
+    } else { silentFrames = 0; heardSomething = true; }
+    if (!heardSomething) return 0;            // mic still starting up: don't learn from the empty frames
 
+    const db = 20 * Math.log10(rms + 1e-7);  // about -100 (silence) .. 0 (as loud as it gets)
     const now = performance.now();
-    if (baseline === null) baseline = level;
+    if (baseline === null) { baseline = Math.max(db, -75); calibUntil = Math.max(calibUntil, now + 700); }
     if (now < calibUntil) {
-      // lean toward the quieter readings, so blowing early doesn't spoil calibration
-      baseline = level < baseline ? baseline * 0.6 + level * 0.4 : baseline * 0.95 + level * 0.05;
+      baseline = db < baseline ? baseline * 0.6 + db * 0.4 : baseline * 0.97 + db * 0.03;
+      setMeter((db + 80) / 80, 0);
       return 0;
     }
-    baseline = Math.min(baseline, 110);
+    baseline = Math.min(Math.max(baseline, -75), -30); // stay in a sane range: never 'silence', never so noisy it's impossible
 
-    const s = +sens.value;               // 1..10
-    const margin = 48 - s * 4.2;         // 43.8 .. 6
-    const threshold = Math.max(baseline + margin, 32 + (10 - s) * 5);
-    const meterMax = threshold + 70;
-    setMeter(level / meterMax, threshold / meterMax);
+    const s = +sens.value;                    // 1..10
+    const margin = 24 - s * 1.8;              // dB above room noise: 22.2 (hard) .. 6 (easiest)
+    const floor = -58 + (10 - s) * 2.5;       // and at least this loud overall
+    const threshold = Math.max(baseline + margin, floor);
+    setMeter((db + 80) / 80, (threshold + 80) / 80);
 
-    if (level > threshold && rms > 0.006 + (10 - s) * 0.004 && spread > 0.04) {
+    if (db > threshold) {
       blowFrames++;
-      // need ~3 frames in a row, so a tap on the phone or a click doesn't count as a blow
-      if (blowFrames >= 3) return Math.min(1, (level - threshold) / 35 + 0.45);
+      if (blowFrames >= 3) {                  // ~50ms in a row: a tap or a click won't count
+        micLabel.textContent = '🎤 Blowing!';
+        return Math.min(1, (db - threshold) / 14 + 0.5);
+      }
       return 0;
     }
     blowFrames = 0;
-    baseline = baseline * 0.995 + Math.min(level, baseline + 10) * 0.005; // follow the room slowly
+    micLabel.textContent = db > baseline + 3 ? '🎤 Hears you' : '🎤 Listening';
+    baseline += (Math.max(db, -75) - baseline) * 0.02;  // follow the room (this frame wasn't a blow)
     return 0;
+  }
+
+  function onMicSilent() {
+    // Rebuild the audio from scratch; iOS needs a fresh tap for that.
+    stopMic();
+    try { audioCtx && audioCtx.close(); } catch (e) {}
+    audioCtx = null;
+    $('startTitle').textContent = 'One more tap';
+    $('startText').textContent = 'The microphone isn\'t sending any sound yet. Tap below to wake it up.';
+    $('startBtn').textContent = '🎤 Wake up the mic';
+    $('start').classList.remove('hidden');
+    setStatus('Microphone is asleep');
   }
 
   let meterShown = -1, markShown = -1;
@@ -254,7 +279,7 @@
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
     let blow = 0;
     try { blow = readBlow(); } catch (e) { console.warn(e); }
-    if (spaceHeld && !celebrating) blow = Math.max(blow, 0.9);
+    if ((spaceHeld || cakeHeld) && !celebrating) blow = Math.max(blow, 0.9);
     blowSmooth += (blow - blowSmooth) * Math.min(1, dt * 14);
     if (blowSmooth < 0.001) blowSmooth = 0;
 
@@ -296,7 +321,7 @@
   function celebrate() {
     if (celebrating) return;
     celebrating = true;
-    spaceHeld = false;
+    spaceHeld = false; cakeHeld = false;
     stopMic();
     document.body.classList.add('dark-room');
     setStatus(name ? `Yay! Your wish will come true, ${name}! 🎉` : 'Yay! Your wish will come true! 🎉');
@@ -319,7 +344,7 @@
     buildCandles();
     setStatus('Make a wish… then blow!');
     if (micWanted) { try { await startMic(); } catch (e) { micFailed(e); } }
-    else setStatus(isPC ? 'Make a wish… then click the candles or hold Space!' : 'Make a wish… then tap the candles!');
+    else setStatus(isPC ? 'Make a wish… then hold Space!' : 'Make a wish… then press and hold the cake!');
   });
 
   // ---------- Happy Birthday melody (public domain) ----------
@@ -429,7 +454,7 @@
     hintText.textContent = !window.isSecureContext
       ? `The microphone needs an https:// link. For now, ${tapWord} to blow them out 👆`
       : `Couldn't use the microphone. ${tapWord[0].toUpperCase() + tapWord.slice(1)} to blow them out 👆`;
-    setStatus(isPC ? 'Make a wish… then click the candles or hold Space!' : 'Make a wish… then tap the candles!');
+    setStatus(isPC ? 'Make a wish… then hold Space!' : 'Make a wish… then press and hold the cake!');
   }
 
   function showResume() {
@@ -461,7 +486,7 @@
     getCtx();
     $('start').classList.add('hidden');
     micFailed(new Error('user chose no mic'));
-    hintText.textContent = isPC ? 'Click each candle, or hold the Space bar to blow 🌬️' : 'Tap each candle to blow it out 👆';
+    hintText.textContent = isPC ? 'Hold the Space bar, or hold down on the cake, to blow 🌬️' : 'Press and hold the cake to blow 🌬️ (or tap each candle)';
   });
 
   // ---------- stop iOS zoom / bounce glitches ----------
