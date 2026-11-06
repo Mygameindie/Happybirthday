@@ -1,7 +1,7 @@
 # 🎂 Happy Birthday – Blow Out the Candles
 
-A one-page birthday cake for phones and iPads. Blow into the microphone
-(at the charger port on a phone, the top edge on an iPad) and the candles
+A one-page birthday cake for phones, iPads and computers. Blow into the microphone
+(at the charger port on a phone, the top edge on an iPad, toward the mic or webcam on a PC) and the candles
 flicker, lean and go out. Then the confetti and the song start.
 
 ## Personalize it
@@ -22,5 +22,5 @@ directly also works, but then you can only tap the candles.
 ## Tips
 
 - If the candles go out too easily, or not at all, move the **Sensitivity** slider.
-- If you don't have a microphone, tap a candle to blow it out.
+- If you don't have a microphone, tap or click a candle to blow it out. On a computer you can also hold the **Space bar** to blow.
 - Sound is only analysed on the device. Nothing is recorded or uploaded.

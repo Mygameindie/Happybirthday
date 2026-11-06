@@ -47,7 +47,7 @@
   .sub { margin: 10px 0 0; color: var(--muted); font-size: clamp(15px, calc(var(--u)*3.6), 24px); text-align: center; min-height: 1.4em; }
 
   /* ---------- cake ---------- */
-  .cake-wrap { position: relative; width: calc(var(--u) * 78); max-width: 520px; aspect-ratio: 1 / 1.05; margin-top: auto; }
+  .cake-wrap { position: relative; width: max(calc(var(--u) * 78), min(50vh, 78vw)); max-width: 520px; aspect-ratio: 1 / 1.05; margin-top: auto; }
   .plate {
     position: absolute; left: -6%; right: -6%; bottom: 2%; height: 9%;
     background: linear-gradient(#f5f1ff, #b9b0d6); border-radius: 50%;
@@ -191,7 +191,7 @@
     <div class="meter" id="meter" title="Blow strength"><div id="meterFill"></div><span id="meterMark"></span></div>
     <div class="row" id="sensRow">
       <label for="sens">Sensitivity</label>
-      <input id="sens" type="range" min="1" max="10" value="6">
+      <input id="sens" type="range" min="1" max="10" value="8">
     </div>
     <div class="row">
       <button id="again" class="hidden">🎂 Light the candles again</button>
@@ -201,7 +201,7 @@
 
 <div class="overlay" id="start">
   <h2 id="startTitle">A cake for you!</h2>
-  <p>Allow the microphone, make a wish, and <b>blow into the charger hole</b> at the bottom of your device to blow out the candles.</p>
+  <p id="startText">Allow the microphone, make a wish, and <b>blow into the charger hole</b> at the bottom of your device to blow out the candles.</p>
   <button id="startBtn">🎤 Tap to start</button>
   <p class="small">Your sound never leaves the device — it's only used to hear you blow.</p>
   <button class="ghost" id="noMicBtn">No mic? Tap the candles instead</button>
@@ -223,19 +223,38 @@
   }
 
   // ---------- device-specific hint ----------
-  const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const UA = navigator.userAgent;
+  const isIPad = /iPad/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isPhone = !isIPad && /iPhone|iPod|Android|Mobile/.test(UA);
+  const isPC = !isIPad && !isPhone && !matchMedia('(pointer: coarse)').matches;
   const hintIcon = $('hintIcon'), hintText = $('hintText');
   function drawHint() {
-    // device outline with an arrow pointing at the port (phone) or top edge (iPad)
-    const port = isIPad
-      ? '<circle cx="17" cy="6" r="1.6" fill="#ffcf5a"/><path d="M17 -8 L17 1" stroke="#ffcf5a" stroke-width="2.5" stroke-linecap="round"/>'
-      : '<rect x="13" y="49" width="8" height="2.4" rx="1.2" fill="#ffcf5a"/>';
-    hintIcon.innerHTML =
-      '<rect x="3" y="2" width="28" height="52" rx="6" fill="none" stroke="#d9c8ff" stroke-width="2"/>' + port +
-      (isIPad ? '' : '<g class="puff"><circle cx="17" cy="56" r="0" fill="#7ff0d8"><animate attributeName="r" values="0;5;0" dur="1.2s" repeatCount="indefinite"/></circle></g>');
-    hintText.textContent = isIPad
-      ? 'Blow at the top edge of your iPad, near the camera — that is where iPad microphones are 🌬️'
-      : 'Blow at the bottom of your phone, right at the charger port 🔌🌬️';
+    const puff = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="0" fill="#7ff0d8"><animate attributeName="r" values="0;5;0" dur="1.2s" repeatCount="indefinite"/></circle>`;
+    if (isPC) {
+      // laptop: screen + webcam dot + keyboard base
+      hintIcon.setAttribute('viewBox', '0 0 56 40');
+      hintIcon.style.width = '56px'; hintIcon.style.height = '40px';
+      hintIcon.innerHTML =
+        '<rect x="8" y="3" width="40" height="26" rx="3" fill="none" stroke="#d9c8ff" stroke-width="2"/>' +
+        '<circle cx="28" cy="6.5" r="1.6" fill="#ffcf5a"/>' +
+        '<path d="M2 33 H54 L50 37 H6 Z" fill="none" stroke="#d9c8ff" stroke-width="2" stroke-linejoin="round"/>' + puff(28, 6.5);
+      hintText.textContent = 'Blow toward your computer\'s microphone (on a laptop it\'s usually by the webcam). No mic? Hold the Space bar 🌬️';
+    } else if (isIPad) {
+      hintIcon.innerHTML =
+        '<rect x="3" y="2" width="28" height="52" rx="6" fill="none" stroke="#d9c8ff" stroke-width="2"/>' +
+        '<circle cx="17" cy="6" r="1.6" fill="#ffcf5a"/>' + puff(17, 6);
+      hintText.textContent = 'Blow at the top edge of your iPad, near the camera. That\'s where iPad microphones are 🌬️';
+    } else {
+      hintIcon.innerHTML =
+        '<rect x="3" y="2" width="28" height="52" rx="6" fill="none" stroke="#d9c8ff" stroke-width="2"/>' +
+        '<rect x="13" y="49" width="8" height="2.4" rx="1.2" fill="#ffcf5a"/>' + puff(17, 56);
+      hintText.textContent = 'Blow at the bottom of your phone, right at the charger port 🔌🌬️';
+    }
+  }
+  if (isPC) {
+    $('startBtn').textContent = '🎤 Click to start';
+    $('startText').innerHTML = 'Allow the microphone, make a wish, and <b>blow toward your computer\'s mic</b> to blow out the candles.';
+    $('noMicBtn').textContent = 'No mic? Click the candles or hold Space';
   }
   drawHint();
 
@@ -253,7 +272,7 @@
       el.style.height = (52 + Math.random() * 18) + '%';
       el.innerHTML = '<div class="flame"><b></b><i></i></div><div class="smoke"></div><div class="smoke"></div><div class="smoke"></div>';
       el.querySelectorAll('.smoke').forEach(s => s.style.setProperty('--drift', (Math.random() * 40 - 20) + 'px'));
-      const c = { el, flame: el.querySelector('.flame'), health: 0.7 + Math.random() * 0.7, lit: true, phase: Math.random() * 6.28 };
+      const c = { el, flame: el.querySelector('.flame'), health: 0.35 + Math.random() * 0.4, lit: true, phase: Math.random() * 6.28 };
       el.addEventListener('click', () => { if (c.lit && !celebrating) { c.health = 0; extinguish(c); } });
       candlesEl.appendChild(el);
       candles.push(c);
@@ -265,8 +284,8 @@
   let audioCtx = null, analyser = null, stream = null, freq = null, wave = null;
   let baseline = null, calibUntil = 0, listening = false, celebrating = false;
   const sens = $('sens');
-  try { const s = localStorage.getItem('cake-sens'); if (s) sens.value = s; } catch (e) {}
-  sens.addEventListener('input', () => { try { localStorage.setItem('cake-sens', sens.value); } catch (e) {} });
+  try { const s = localStorage.getItem('cake-sens-v2'); if (s) sens.value = s; } catch (e) {}
+  sens.addEventListener('input', () => { try { localStorage.setItem('cake-sens-v2', sens.value); } catch (e) {} });
 
   function getCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -324,15 +343,15 @@
 
     // threshold: higher sensitivity => smaller margin above room noise
     const s = +sens.value;               // 1..10
-    const margin = 70 - s * 5.5;         // 64.5 .. 15
-    const threshold = Math.max(baseline + margin, 55 + (10 - s) * 6);
+    const margin = 48 - s * 4.2;         // 43.8 .. 6
+    const threshold = Math.max(baseline + margin, 32 + (10 - s) * 5);
     const meterMax = threshold + 70;
     $('meterFill').style.width = Math.min(100, (level / meterMax) * 100) + '%';
     $('meterMark').style.left = (threshold / meterMax * 100) + '%';
 
     let intensity = 0;
-    if (level > threshold && rms > 0.02 + (10 - s) * 0.006 && spread > 0.12) {
-      intensity = Math.min(1, (level - threshold) / 50 + 0.25);
+    if (level > threshold && rms > 0.006 + (10 - s) * 0.004 && spread > 0.04) {
+      intensity = Math.min(1, (level - threshold) / 35 + 0.45);
     } else {
       // slowly adapt to the room while nobody is blowing
       baseline = baseline * 0.995 + Math.min(level, baseline + 10) * 0.005;
@@ -341,10 +360,20 @@
   }
 
   // ---------- animation loop ----------
+  let spaceHeld = false;
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.key === ' ') {
+      e.preventDefault();
+      if (!$('start').classList.contains('hidden')) return;
+      spaceHeld = true;
+    }
+  });
+  addEventListener('keyup', e => { if (e.code === 'Space' || e.key === ' ') spaceHeld = false; });
+  addEventListener('blur', () => { spaceHeld = false; });
   let last = performance.now(), blowSmooth = 0;
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    const blow = readBlow();
+    const blow = Math.max(readBlow(), spaceHeld && !celebrating ? 0.9 : 0);
     blowSmooth += (blow - blowSmooth) * Math.min(1, dt * 14);
 
     let litCount = 0;
@@ -357,10 +386,10 @@
       c.flame.style.setProperty('--size', (1 - blowSmooth * 0.45 + Math.sin(c.phase * 2.3) * 0.03).toFixed(3));
       c.flame.style.setProperty('--stretch', (1 + blowSmooth * 0.35).toFixed(3));
       if (blow > 0) {
-        c.health -= blow * dt * (1.4 + Math.random() * 1.6);
+        c.health -= blow * dt * (2.5 + Math.random() * 2.5);
         if (c.health <= 0) { extinguish(c); continue; }
-      } else if (c.health < 1.4) {
-        c.health += dt * 0.25; // a flame that survived recovers a little
+      } else if (c.health < 0.75) {
+        c.health += dt * 0.08; // a flame that survived recovers a little
       }
       litCount++;
     }
@@ -479,9 +508,9 @@
     $('sensRow').classList.add('hidden');
     const insecure = !window.isSecureContext;
     hintText.textContent = insecure
-      ? 'The microphone needs an https:// link. For now, tap each candle to blow it out 👆'
-      : 'Couldn\'t use the microphone — tap each candle to blow it out 👆';
-    statusEl.textContent = 'Make a wish… then tap the candles!';
+      ? `The microphone needs an https:// link. For now, ${isPC ? 'click the candles or hold Space' : 'tap each candle'} to blow them out 👆`
+      : `Couldn't use the microphone. ${isPC ? 'Click the candles or hold Space' : 'Tap each candle'} to blow them out 👆`;
+    statusEl.textContent = isPC ? 'Make a wish… then click the candles or hold Space!' : 'Make a wish… then tap the candles!';
   }
 
   $('startBtn').addEventListener('click', async () => {
@@ -496,7 +525,7 @@
     getCtx();
     $('start').classList.add('hidden');
     micFailed(new Error('user chose no mic'));
-    hintText.textContent = 'Tap each candle to blow it out 👆';
+    hintText.textContent = isPC ? 'Click each candle, or hold the Space bar to blow 🌬️' : 'Tap each candle to blow it out 👆';
   });
 })();
 </script>
