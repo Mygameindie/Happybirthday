@@ -24,3 +24,11 @@ directly also works, but then you can only tap the candles.
 - If the candles go out too easily, or not at all, move the **Sensitivity** slider.
 - If you don't have a microphone, tap or click a candle to blow it out. On a computer you can also hold the **Space bar** to blow.
 - Sound is only analysed on the device. Nothing is recorded or uploaded.
+
+## Files
+
+- `index.html`: the page
+- `style.css`: the look of the page, plus fixes for phone glitches (no zoom or bounce, steady layout when the address bar moves)
+- `script.js`: blow detection, candles, confetti and song. It also handles the mic being paused by a call or screen lock.
+
+Upload all three files together.

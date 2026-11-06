@@ -1,0 +1,196 @@
+:root {
+  --bg1: #1b1035;
+  --bg2: #3a1c5c;
+  --text: #fff7ec;
+  --muted: #d9c8ff;
+  --accent: #ffcf5a;
+  --pink: #ff8fb8;
+  --u: min(1vw, 0.62vh);   /* scale unit that fits phones and iPads, portrait or landscape */
+}
+/* Use the real visible height on phones, so the layout doesn't jump when Safari's address bar shows/hides */
+@supports (height: 100svh) {
+  :root { --u: min(1vw, 0.62svh); }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 30%, var(--bg2), var(--bg1) 70%);
+  background-color: var(--bg1);
+  color: var(--text);
+  font-family: "Nunito", system-ui, -apple-system, sans-serif;
+  touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;          /* no "copy / look up" popup on long-press */
+  -webkit-text-size-adjust: 100%;       /* no font jump when rotating an iPhone */
+  text-size-adjust: 100%;
+  overscroll-behavior: none;            /* no rubber-band bounce / pull-to-refresh */
+}
+html { position: fixed; inset: 0; }     /* iOS: keeps the page from scrolling under the finger */
+body { transition: background-color .6s ease; }
+img, svg { -webkit-user-drag: none; }
+body.dark-room { background: radial-gradient(ellipse at 50% 30%, #2a1a40, #0c0716 70%); }
+
+.stage {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.stage > div:first-child { flex: none; }
+
+h1 {
+  font-family: "Pacifico", cursive; font-weight: 400;
+  font-size: clamp(30px, calc(var(--u) * 10), 72px);
+  margin: 2vh 0 0; text-align: center; line-height: 1.45;
+  color: var(--accent);
+  text-shadow: 0 0 18px rgba(255, 207, 90, .55), 0 3px 0 #b36b00;
+}
+.sub { margin: 10px 0 0; overflow-wrap: anywhere; color: var(--muted); font-size: clamp(15px, calc(var(--u)*3.6), 24px); text-align: center; min-height: 1.4em; }
+
+/* ---------- cake ---------- */
+.cake-wrap { position: relative; width: max(calc(var(--u) * 78), min(50vh, 78vw)); max-width: 520px; aspect-ratio: 1 / 1.05; margin-top: auto; flex: none; contain: layout; }
+.plate {
+  position: absolute; left: -6%; right: -6%; bottom: 2%; height: 9%;
+  background: linear-gradient(#f5f1ff, #b9b0d6); border-radius: 50%;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+.tier {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  border-radius: 12% / 18%;
+  overflow: hidden;
+}
+.tier.bottom { bottom: 6%; width: 92%; height: 32%; background: linear-gradient(90deg, #e86f9b, #ff9cc1 45%, #e86f9b); }
+.tier.top    { bottom: 36%; width: 70%; height: 26%; background: linear-gradient(90deg, #8c5de0, #b48cff 45%, #8c5de0); }
+.tier::before { /* frosting top */
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 30%;
+  background: #fff4fa; border-radius: 0 0 40% 40% / 0 0 100% 100%;
+}
+.tier .drips { position: absolute; left: 0; right: 0; top: 18%; height: 40%; display: flex; justify-content: space-around; }
+.tier .drips span { width: 9%; background: #fff4fa; border-radius: 0 0 50px 50px; }
+.tier .dots { position: absolute; left: 0; right: 0; bottom: 18%; display: flex; justify-content: space-around; }
+.tier .dots span { width: calc(var(--u)*2.2); height: calc(var(--u)*2.2); max-width: 15px; max-height: 15px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px rgba(255,207,90,.7); }
+.tier.top .dots span { background: #7ff0d8; box-shadow: 0 0 6px rgba(127,240,216,.7); }
+
+.candles {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 58%; width: 62%; height: 32%;
+  display: flex; justify-content: space-evenly; align-items: flex-end;
+}
+.candle {
+  position: relative; width: calc(var(--u) * 3.4); max-width: 24px; height: 62%;
+  border-radius: 4px 4px 2px 2px;
+  background: repeating-linear-gradient(135deg, #fff 0 7px, var(--c, #6fc3ff) 7px 14px);
+  box-shadow: inset -3px 0 0 rgba(0,0,0,.12);
+  cursor: pointer;
+  touch-action: none;
+}
+.candle::after { /* invisible, finger-sized tap area around each thin candle */
+  content: ""; position: absolute; left: -10px; right: -10px; top: -45%; bottom: -6px;
+}
+.candle::before { /* wick */
+  content: ""; position: absolute; left: 50%; top: -9px; width: 2px; height: 9px; margin-left: -1px; background: #3a2a1a; border-radius: 1px;
+}
+.flame {
+  position: absolute; left: 50%; bottom: calc(100% + 6px);
+  width: calc(var(--u) * 4); max-width: 28px; aspect-ratio: 1 / 1.7;
+  margin-left: calc(var(--u) * -2);
+  transform-origin: 50% 100%;
+  transform: rotate(var(--lean, 0deg)) scale(var(--size, 1), calc(var(--size, 1) * var(--stretch, 1)));
+  pointer-events: none;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+@supports (margin-left: max(1px, 2px)) { .flame { margin-left: max(calc(var(--u) * -2), -14px); } }
+.flame i {
+  position: absolute; inset: 0;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(ellipse at 50% 75%, #fffbe0 0 18%, #ffd34d 35%, #ff8a1f 62%, rgba(255,80,0,0) 72%);
+  animation: flicker .14s infinite alternate ease-in-out;
+}
+.flame b { /* glow */
+  position: absolute; left: -120%; right: -120%; top: -60%; bottom: -50%;
+  background: radial-gradient(circle, rgba(255,200,80,.38), rgba(255,160,40,0) 62%);
+  border-radius: 50%;
+}
+@keyframes flicker {
+  from { transform: scale(1, 1) skewX(-2deg); }
+  to   { transform: scale(.93, 1.06) skewX(2deg); }
+}
+.candle.out .flame { opacity: 0; transform: scale(.1); transition: opacity .25s ease-out, transform .25s ease-out; }
+.candle.out .flame i { animation: none; }
+.smoke {
+  position: absolute; left: 50%; bottom: calc(100% + 6px); width: 14px; height: 14px; margin-left: -7px;
+  border-radius: 50%; background: rgba(220,220,235,.55); filter: blur(3px);
+  opacity: 0; pointer-events: none;
+  will-change: transform, opacity;
+}
+.candle.out .smoke { animation: smoke 1.8s ease-out forwards; }
+.candle.out .smoke:nth-child(3) { animation-delay: .25s; }
+.candle.out .smoke:nth-child(4) { animation-delay: .5s; }
+@keyframes smoke {
+  0%   { opacity: .8; transform: translate(0, 0) scale(.6); }
+  100% { opacity: 0;  transform: translate(calc(var(--drift, 10px)), -90px) scale(3); }
+}
+
+/* ---------- bottom panel ---------- */
+.panel { width: 100%; max-width: 560px; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: auto; padding-top: 12px; }
+.hint {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+  padding: 10px 14px; border-radius: 16px; font-size: clamp(14px, calc(var(--u)*3.2), 20px); line-height: 1.3;
+}
+.hint svg { flex: none; width: 34px; height: 56px; }
+.meter { width: 100%; height: 10px; border-radius: 6px; background: rgba(255,255,255,.12); overflow: hidden; position: relative; }
+.meter > div { height: 100%; width: 100%; background: linear-gradient(90deg, #7ff0d8, var(--accent), var(--pink)); transform: scaleX(0); transform-origin: 0 50%; transition: transform .08s linear; will-change: transform; }
+.meter > span { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #fff; opacity: .8; }
+.row { display: flex; gap: 10px; align-items: center; width: 100%; justify-content: center; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.row input[type=range] { width: 160px; accent-color: var(--accent); touch-action: pan-x; }
+button {
+  font: 800 clamp(16px, calc(var(--u)*3.6), 22px) "Nunito", sans-serif;
+  color: #2b1250; background: var(--accent); border: 0; border-radius: 999px;
+  padding: 14px 28px; box-shadow: 0 6px 0 #b36b00, 0 10px 24px rgba(0,0,0,.35);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform .06s, box-shadow .06s;
+}
+button:active { transform: translateY(3px); box-shadow: 0 3px 0 #b36b00; }
+button:disabled { opacity: .6; cursor: wait; }
+button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+button:focus:not(:focus-visible) { outline: none; }
+button.ghost { background: rgba(255,255,255,.14); color: var(--text); box-shadow: none; padding: 10px 20px; font-size: 15px; }
+.hidden { display: none !important; }
+
+/* ---------- start overlay ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center;
+  padding: 24px; background: rgba(15, 8, 30, .86); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: fadeIn .25s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* older/low-power devices: skip the costly blur */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .overlay { background: rgba(15, 8, 30, .95); }
+}
+.overlay h2 { font-family: "Pacifico", cursive; font-weight: 400; color: var(--accent); font-size: clamp(28px, 8vw, 52px); margin: 0; }
+.overlay p { margin: 0; max-width: 420px; color: var(--muted); font-size: 17px; line-height: 1.45; }
+.overlay .small { font-size: 13px; opacity: .8; }
+
+canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+/* short landscape phones: keep everything on screen */
+@media (max-height: 500px) and (orientation: landscape) {
+  h1 { margin-top: 0; font-size: 28px; line-height: 1.3; }
+  .sub { margin-top: 2px; font-size: 14px; }
+  .cake-wrap { width: 46vh; }
+  .hint svg { display: none; }
+  .hint { padding: 6px 12px; font-size: 13px; }
+  .panel { gap: 6px; padding-top: 4px; }
+  button { padding: 10px 22px; }
+}
+
+/* people who turn off motion: calmer flames and smoke */
+@media (prefers-reduced-motion: reduce) {
+  .flame i { animation-duration: .6s; }
+  .candle.out .smoke { animation-duration: .8s; }
+  .overlay { animation: none; }
+}
