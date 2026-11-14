@@ -4,14 +4,40 @@ A one-page birthday cake for phones, iPads and computers. Blow into the micropho
 (at the charger port on a phone, the top edge on an iPad, toward the mic or webcam on a PC) and the candles
 flicker, lean and go out. Then the confetti and the song start.
 
-## Personalize it
+## Two people, two sides
 
-Add these to the link:
+Opening the page with no cake in the link asks **who are you?**
 
-- `?name=Mia`: shows "Happy Birthday, Mia!"
-- `&candles=7`: number of candles (1–12)
+- **👩‍🍳 I'm the baker:** design the cake with a live preview, then
+  - **🎁 Send this cake:** makes a link (copied for you, or the share sheet on a phone) to send to the birthday person
+  - **🌬️ Blow it out now:** try it yourself, then **✏️ Back to baking**
+- **🎂 It's my birthday:** blow out the candles on a ready-made cake.
 
-Example: `https://<your-site>/index.html?name=Mia&candles=7`
+Whoever opens a link the baker sent goes straight to blowing out *that* cake.
+The baker's last design is remembered on their device.
+
+### What the baker can choose
+
+- **Cake:** 1–3 tiers · round, square or heart · vanilla, chocolate, strawberry, red velvet, matcha, ube · plate color
+- **Cream:** 7 colors · drips, layered, swirls or rosettes
+- **Toppings** (as many as you like): sprinkles, stars, strawberries, cherries, macarons, chocolate
+- **Photo:** add your own picture, printed on the front of the cake (like an edible photo print) or as a topper on a stick · circle, heart or square frame
+- **Candles:** 1–12 candles, or number candles for an age like "25" · striped, plain or sparkle · rainbow or one color
+- **Words:** the name in the title, plus a short message piped on the cake
+
+Everything lives in the link, for example
+`index.html?name=Mia&tiers=3&shape=heart&flavor=ube&cream=pink&style=swirls&top=strawberries&num=7&msg=Love+you`.
+Old links like `?name=Mia&candles=7` still work.
+
+### Photos
+
+While the baker designs, the photo stays on their device. When they tap **Send this cake**, a sharp 600×600 copy is
+uploaded to Supabase Storage (project `happybirthday-cake`, bucket `cake-photos`) and the link only carries its id
+(`&pid=...`). If the upload fails, the link carries a tiny copy of the photo instead (`#p=...`), so it still works.
+
+The key in `cake.js` is Supabase's public key. With it, people can only *add* new photos: JPEG or WebP, under 400 KB,
+with a random name. Nobody can list, replace or delete photos with it. Anyone who has a cake's link can see that cake's photo.
+To remove photos, use the Supabase dashboard → Storage → `cake-photos`.
 
 ## Hosting
 
@@ -30,6 +56,8 @@ directly also works, but then you can only tap the candles.
 
 - `index.html`: the page
 - `style.css`: the look of the page, plus fixes for phone glitches (no zoom or bounce, steady layout when the address bar moves)
+- `cake.js`: the cake options, the links, and drawing the cake
+- `builder.js`: the baker's screen and sending the link
 - `script.js`: blow detection, candles, confetti and song. It also handles the mic being paused by a call or screen lock.
 
-Upload all three files together.
+Upload all five files together.

@@ -1,18 +1,17 @@
 (() => {
   'use strict';
 
-  // ---------- settings from the URL: ?name=Mia&candles=7 ----------
-  const params = new URLSearchParams(location.search);
-  const name = (params.get('name') || '').trim().slice(0, 30);
-  const candleCount = Math.min(12, Math.max(1, parseInt(params.get('candles') || params.get('age'), 10) || 5));
+  // ---------- the cake: from the link (?name=Mia&tiers=3...) or from the builder ----------
+  let cfg = Cake.fromLocation(location);
+  let mode = 'idle';   // 'build' = designing (no blowing), 'blow' = birthday time
 
   const $ = id => document.getElementById(id);
   const titleEl = $('title'), statusEl = $('status');
   const meterFill = $('meterFill'), meterMark = $('meterMark'), micLabel = $('micLabel');
-  if (name) {
-    titleEl.textContent = `Happy Birthday, ${name}!`;
-    $('startTitle').textContent = `A cake for ${name}!`;
-    document.title = `Happy Birthday, ${name}!`;
+  function applyTitle() {
+    const t = cfg.name ? `Happy Birthday, ${cfg.name}!` : 'Happy Birthday!';
+    if (titleEl.textContent !== t) titleEl.textContent = t;
+    document.title = t;
   }
 
   // Only touch the DOM when text actually changes (stops the status line flickering every frame).
@@ -53,40 +52,61 @@
       hintText.textContent = 'Blow at the bottom of your phone, right at the charger port 🔌 Or press and hold the cake 🌬️';
     }
   }
-  if (isPC) {
-    $('startBtn').textContent = '🎤 Click to start';
-    $('startText').innerHTML = 'Allow the microphone, make a wish, and <b>blow toward your computer\'s mic</b> to blow out the candles.';
-    $('noMicBtn').textContent = 'No mic? Click the candles or hold Space';
+  function setStartTexts() {
+    $('startTitle').textContent = cfg.name ? `A cake for ${cfg.name}!` : 'A cake for you!';
+    if (isPC) {
+      $('startBtn').textContent = '🎤 Click to start';
+      $('startText').innerHTML = 'Allow the microphone, make a wish, and <b>blow toward your computer\'s mic</b> to blow out the candles.';
+      $('noMicBtn').textContent = 'No mic? Click the candles or hold Space';
+    } else {
+      $('startBtn').textContent = '🎤 Tap to start';
+      $('startText').innerHTML = isIPad
+        ? 'Allow the microphone, make a wish, and <b>blow at the top edge</b> of your iPad to blow out the candles.'
+        : 'Allow the microphone, make a wish, and <b>blow into the charger hole</b> at the bottom of your device to blow out the candles.';
+      $('noMicBtn').textContent = 'No mic? Tap the candles instead';
+    }
   }
+  setStartTexts();
   drawHint();
 
   // ---------- candles ----------
-  const colors = ['#6fc3ff', '#ff8fb8', '#7ff0d8', '#ffcf5a', '#b48cff', '#ff9f6b'];
-  const candlesEl = $('candles');
+  const candlesEl = $('candles'), cakeSvg = $('cakeSvg');
   let candles = [];
+  const HEIGHTS = [0.4, 0.9, 0.15, 0.7, 0.3, 1, 0.55, 0.05, 0.8, 0.45, 0.2, 0.65]; // fixed, so the preview doesn't jump
 
   function buildCandles() {
     const frag = document.createDocumentFragment();
     candles = [];
-    for (let i = 0; i < candleCount; i++) {
+    Cake.candleList(cfg).forEach((info, i) => {
       const el = document.createElement('div');
-      el.className = 'candle';
-      el.style.setProperty('--c', colors[i % colors.length]);
-      el.style.height = (52 + Math.random() * 18) + '%';
-      el.innerHTML = '<div class="flame"><b></b><i></i></div><div class="smoke"></div><div class="smoke"></div><div class="smoke"></div>';
+      el.className = 'candle ' + cfg.cstyle + (info.digit ? ' num' : '');
+      el.style.setProperty('--c', info.color);
+      if (!info.digit) el.style.height = (52 + HEIGHTS[i % HEIGHTS.length] * 18) + '%';
+      el.innerHTML = (info.digit ? '<span class="digit"></span>' : '') +
+        '<div class="flame"><b></b><i></i></div><div class="smoke"></div><div class="smoke"></div><div class="smoke"></div>';
+      if (info.digit) el.firstChild.textContent = info.digit;
       el.querySelectorAll('.smoke').forEach(s => s.style.setProperty('--drift', (Math.random() * 40 - 20) + 'px'));
       const c = { el, flame: el.querySelector('.flame'), health: 0.35 + Math.random() * 0.4, lit: true, phase: Math.random() * 6.28, lean: '', size: '', stretch: '' };
       frag.appendChild(el);
       candles.push(c);
-    }
+    });
     candlesEl.replaceChildren(frag);
   }
-  buildCandles();
+
+  // Draw the cake and stand the candles on its top tier.
+  function renderCake() {
+    const box = Cake.render(cakeSvg, cfg);
+    Object.assign(candlesEl.style, box);
+    buildCandles();
+    candlesEl.classList.toggle('many', candles.length > 7);
+    applyTitle();
+  }
+  renderCake();
 
   // One delegated listener: works for rebuilt candles, and pointerdown reacts faster than click on touch screens.
   candlesEl.addEventListener('pointerdown', e => {
     const el = e.target.closest('.candle');
-    if (!el || celebrating) return;
+    if (!el || celebrating || mode !== 'blow') return;
     const c = candles.find(x => x.el === el);
     if (c && c.lit) { c.health = 0; extinguish(c); }
   });
@@ -95,7 +115,7 @@
   let cakeHeld = false;
   const cakeEl = $('cake');
   cakeEl.addEventListener('pointerdown', e => {
-    if (celebrating || e.target.closest('.candle')) return;
+    if (celebrating || mode !== 'blow' || e.target.closest('.candle')) return;
     cakeHeld = true;
     try { cakeEl.setPointerCapture(e.pointerId); } catch (err) {}
   });
@@ -263,7 +283,8 @@
   let spaceHeld = false;
   addEventListener('keydown', e => {
     if (e.code !== 'Space' && e.key !== ' ') return;
-    if (e.target && e.target.tagName === 'TEXTAREA') return;
+    if (mode !== 'blow') return;
+    if (e.target && /^(TEXTAREA|INPUT|SELECT)$/.test(e.target.tagName)) return;
     e.preventDefault();             // also stops Space from "pressing" a focused button
     if (e.repeat && spaceHeld) return;
     if (!$('start').classList.contains('hidden')) return;
@@ -279,7 +300,7 @@
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
     let blow = 0;
     try { blow = readBlow(); } catch (e) { console.warn(e); }
-    if ((spaceHeld || cakeHeld) && !celebrating) blow = Math.max(blow, 0.9);
+    if ((spaceHeld || cakeHeld) && !celebrating && mode === 'blow') blow = Math.max(blow, 0.9);
     blowSmooth += (blow - blowSmooth) * Math.min(1, dt * 14);
     if (blowSmooth < 0.001) blowSmooth = 0;
 
@@ -324,7 +345,7 @@
     spaceHeld = false; cakeHeld = false;
     stopMic();
     document.body.classList.add('dark-room');
-    setStatus(name ? `Yay! Your wish will come true, ${name}! 🎉` : 'Yay! Your wish will come true! 🎉');
+    setStatus(cfg.name ? `Yay! Your wish will come true, ${cfg.name}! 🎉` : 'Yay! Your wish will come true! 🎉');
     setMeter(0, markShown < 0 ? 0 : markShown);
     $('again').classList.remove('hidden');
     $('hint').classList.add('hidden');
@@ -492,6 +513,57 @@
   // ---------- stop iOS zoom / bounce glitches ----------
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
-  document.addEventListener('touchmove', e => { if (e.target.type !== 'range') e.preventDefault(); }, { passive: false });
+  // (the builder's option list is allowed to scroll)
+  document.addEventListener('touchmove', e => {
+    if (e.target.type === 'range' || (e.target.closest && e.target.closest('.scroll-ok'))) return;
+    e.preventDefault();
+  }, { passive: false });
   document.addEventListener('contextmenu', e => { if (e.target.closest('.cake-wrap')) e.preventDefault(); });
+
+  // ---------- modes: building (baker) and blowing (birthday person) ----------
+  function resetBlowState() {
+    clearTimeout(songTimer);
+    stopSong();
+    celebrating = false;
+    spaceHeld = false; cakeHeld = false;
+    micWanted = false;
+    stopMic();
+    audioCtxCheck();
+    document.body.classList.remove('dark-room');
+    $('again').classList.add('hidden');
+    $('hint').classList.remove('hidden');
+    $('start').classList.add('hidden');
+    showMicUI(true);
+    setMeter(0, 0);
+    micLabel.textContent = '🎤 Mic';
+  }
+  function audioCtxCheck() {
+    // a fresh start after "One more tap" rebuilt the audio
+    if (audioCtx && audioCtx.state === 'closed') audioCtx = null;
+  }
+
+  window.App = {
+    get cake() { return cfg; },
+    setCake(c) { cfg = Cake.normalize(c); renderCake(); },
+    enterBuild() {
+      mode = 'build';
+      resetBlowState();
+      document.body.classList.add('mode-build');
+      renderCake();
+      setStatus('Your cake, live 👀');
+    },
+    enterBlow(opts) {
+      mode = 'blow';
+      resetBlowState();
+      document.body.classList.remove('mode-build');
+      const fromBuilder = !!(opts && opts.fromBuilder);
+      $('editBtn').classList.toggle('hidden', !fromBuilder);
+      $('backBtn').classList.toggle('hidden', !fromBuilder);
+      renderCake();
+      setStartTexts();
+      drawHint();
+      $('start').classList.remove('hidden');
+      setStatus('Make a wish… then blow!');
+    }
+  };
 })();
