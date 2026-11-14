@@ -29,8 +29,15 @@ Everything lives in the link, for example
 `index.html?name=Mia&tiers=3&shape=heart&flavor=ube&cream=pink&style=swirls&top=strawberries&num=7&msg=Love+you`.
 Old links like `?name=Mia&candles=7` still work.
 
-A photo also travels inside the link (after the `#`). To keep the link short enough for chat apps, the picture is cropped
-to a square and made small (about 3 KB), so it looks best as a face or a pet close-up.
+### Photos
+
+While the baker designs, the photo stays on their device. When they tap **Send this cake**, a sharp 600×600 copy is
+uploaded to Supabase Storage (project `happybirthday-cake`, bucket `cake-photos`) and the link only carries its id
+(`&pid=...`). If the upload fails, the link carries a tiny copy of the photo instead (`#p=...`), so it still works.
+
+The key in `cake.js` is Supabase's public key. With it, people can only *add* new photos: JPEG or WebP, under 400 KB,
+with a random name. Nobody can list, replace or delete photos with it. Anyone who has a cake's link can see that cake's photo.
+To remove photos, use the Supabase dashboard → Storage → `cake-photos`.
 
 ## Hosting
 

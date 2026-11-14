@@ -90,7 +90,7 @@
         if (!cfg.photo) {
           return `<div class="group photo-group"><h3>Photo on the cake</h3>` +
             `<label class="photo-add"><input type="file" id="bPhoto" accept="image/*" hidden><span class="em">📷</span>Add a photo</label>` +
-            `<p class="note">A face, a pet, a memory… it goes on the cake like an edible print.</p></div>`;
+            `<p class="note">A face, a pet, a memory… it goes on the cake like an edible print. It stays on this device until you send the cake.</p></div>`;
         }
         return `<div class="group photo-group"><h3>Photo on the cake</h3>` +
           `<div class="photo-row"><img class="photo-thumb" src="${cfg.photo}" alt="Your photo">` +
@@ -98,7 +98,7 @@
           `<button type="button" class="chip" id="bPhotoDel">🗑️ Remove</button></div>` +
           `<h3 class="sub-h">Where</h3><div class="chips">${opts(C.PIC_PLACES).map(o => chipHTML('pic', o)).join('')}</div>` +
           `<h3 class="sub-h">Frame</h3><div class="chips">${opts(C.PIC_SHAPES).map(o => chipHTML('picshape', o)).join('')}</div>` +
-          `<p class="note">The photo travels inside the link, so it's made small.</p></div>`;
+          `<p class="note">It's uploaded when you send the cake, so the birthday person can see it.</p></div>`;
       }
       if (g.special === 'msg') {
         return `<div class="group"><h3>Message on the cake</h3><input class="text-in" id="bMsg" type="text" maxlength="${C.MAX_MSG}" placeholder="e.g. Love you! 💕" value="${esc(cfg.msg)}" autocomplete="off" enterkeyhint="done">` +
@@ -128,7 +128,7 @@
       update();
     }
   });
-  // ---------- photo: crop to a square and shrink it so it fits in a link ----------
+  // ---------- photo: crop to a square; sharp copy for the cloud, tiny copy as a fallback ----------
   function loadImage(file) {
     return new Promise((res, rej) => {
       const url = URL.createObjectURL(file), img = new Image();
@@ -137,18 +137,31 @@
       img.src = url;
     });
   }
-  async function shrinkPhoto(file) {
-    const img = await loadImage(file);
-    const w = img.naturalWidth, h = img.naturalHeight, side = Math.min(w, h);
+  function squareCanvas(img, size) {
+    const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, side = Math.min(w, h);
     const sx = (w - side) / 2, sy = (h - side) * 0.3;     // tall photos: keep the top part, where faces usually are
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = Math.min(size, side);
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, sx, sy, side, side, 0, 0, cv.width, cv.height);
+    return cv;
+  }
+  async function sharpPhoto(file) {
+    const cv = squareCanvas(await loadImage(file), 600);
+    for (const q of [0.86, 0.78, 0.68, 0.55]) {
+      const d = cv.toDataURL('image/jpeg', q);
+      if (d.length <= 300000) return d;
+    }
+    return cv.toDataURL('image/jpeg', 0.45);
+  }
+  // Tiny version for the link itself, used only if the upload fails.
+  async function tinyPhoto(dataUrl) {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
     let best = '';
     for (const size of [144, 128, 112, 96, 80]) {
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = size;
-      const g = cv.getContext('2d');
-      g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
-      g.imageSmoothingQuality = 'high';
-      g.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      const cv = squareCanvas(img, size);
       for (const q of [0.72, 0.6, 0.5, 0.4]) {
         const d = cv.toDataURL('image/jpeg', q);
         best = d;
@@ -160,9 +173,9 @@
   bodyEl.addEventListener('change', async e => {
     if (e.target.id !== 'bPhoto' || !e.target.files || !e.target.files[0]) return;
     try {
-      const d = await shrinkPhoto(e.target.files[0]);
-      cfg.photo = d;
+      const d = await sharpPhoto(e.target.files[0]);
       if (!C.normalize({ photo: d }).photo) throw new Error('too big');
+      cfg.photo = d; cfg.photoId = '';          // a new photo: upload it again when sending
       update(); renderBody();
       toast('📷 Photo added!');
     } catch (err) {
@@ -171,7 +184,7 @@
     }
   });
   bodyEl.addEventListener('click', e => {
-    if (e.target.closest('#bPhotoDel')) { cfg.photo = ''; update(); renderBody(); }
+    if (e.target.closest('#bPhotoDel')) { cfg.photo = ''; cfg.photoId = ''; update(); renderBody(); }
   });
 
   bodyEl.addEventListener('input', e => {
@@ -213,7 +226,26 @@
   $('backBtn').addEventListener('click', enterBuild);
 
   // ---------- sending ----------
-  function shareUrl() { return location.href.split(/[?#]/)[0] + '?' + C.toParams(App.cake) + C.photoHash(App.cake); }
+  // The link carries the cloud photo's id; never the big local copy.
+  function shareUrl(tiny) {
+    const c = Object.assign({}, App.cake);
+    if (c.photoId) c.photo = '';
+    return location.href.split(/[?#]/)[0] + '?' + C.toParams(c) + (c.photoId ? '' : C.photoHash(tiny));
+  }
+  // Make sure the photo is online before building the link. Returns the tiny fallback if not.
+  async function preparePhoto() {
+    if (!cfg.photo || cfg.photoId) return '';
+    try {
+      const blob = await (await fetch(cfg.photo)).blob();
+      cfg.photoId = await C.uploadPhoto(blob);
+      update();
+      return '';
+    } catch (e) {
+      console.warn(e);
+      toast('Couldn\'t upload the photo, so the link has a smaller copy.');
+      try { return await tinyPhoto(cfg.photo); } catch (err) { return ''; }
+    }
+  }
   function shareText() {
     const n = App.cake.name;
     return n ? `🎂 I baked you a birthday cake, ${n}! Open it, make a wish and blow out the candles:` : '🎂 I baked you a birthday cake! Open it, make a wish and blow out the candles:';
@@ -233,8 +265,16 @@
   }
   const canShare = () => !!navigator.share && isTouch;
 
-  $('sendBtn').addEventListener('click', async () => {
-    const url = shareUrl(), n = App.cake.name;
+  const sendBtn = $('sendBtn');
+  sendBtn.addEventListener('click', async () => {
+    if (sendBtn.disabled) return;
+    const label = sendBtn.textContent;
+    let tiny = '';
+    if (cfg.photo && !cfg.photoId) {
+      sendBtn.disabled = true; sendBtn.textContent = '📤 Uploading photo…';
+      try { tiny = await preparePhoto(); } finally { sendBtn.disabled = false; sendBtn.textContent = label; }
+    }
+    const url = shareUrl(tiny), n = App.cake.name;
     $('shareLink').value = url;
     $('openLink').href = url;
     $('shareWarn').classList.toggle('hidden', /^https:/.test(location.protocol) || /^(localhost|127\.)/.test(location.hostname));

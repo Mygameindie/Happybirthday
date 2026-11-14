@@ -71,14 +71,25 @@
     heart:  { label: 'Heart',  emoji: '❤️' },
     square: { label: 'Square', emoji: '⬜' }
   };
-  // The photo travels inside the link, so it is kept tiny (chat apps cut very long links).
-  const PHOTO_MAX = 4200;
+  // Photos: the baker's device keeps a sharp copy (photo); when the cake is sent it is uploaded
+  // to Supabase Storage and the link only carries its id (?pid=...).
+  // If the upload fails, a tiny copy rides inside the link instead (#p=..., kept short for chat apps).
+  const CLOUD = {
+    url: 'https://dcluindkvsbualyexaoh.supabase.co',
+    key: 'sb_publishable_x6wP17obaB3WaduaB4gDhA_HzFpE1dY',   // public key: can only add new photos
+    bucket: 'cake-photos'
+  };
+  const PHOTO_MAX = 4200;          // tiny in-link copy (base64 characters)
+  const PHOTO_LOCAL_MAX = 400000;  // sharp copy kept on the baker's device
   const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/;
+  const PID_RE = /^[A-Za-z0-9_-]{20,40}\.jpg$/;
+  const photoUrl = id => `${CLOUD.url}/storage/v1/object/public/${CLOUD.bucket}/${id}`;
+  const photoSrc = c => c.photo || (c.photoId ? photoUrl(c.photoId) : '');
 
   const DEFAULTS = {
     name: '', tiers: 2, shape: 'round', flavor: 'strawberry', cream: 'white', style: 'drips',
     top: ['sprinkles'], kind: 'count', candles: 5, num: '', cstyle: 'striped', ccolor: 'rainbow',
-    msg: '', plate: 'white', photo: '', pic: 'front', picshape: 'circle'
+    msg: '', plate: 'white', photo: '', photoId: '', pic: 'front', picshape: 'circle'
   };
   const MAX_NAME = 30, MAX_MSG = 24;
 
@@ -106,7 +117,8 @@
       ccolor: pick(o.ccolor, CANDLE_COLORS, d.ccolor),
       msg: String(o.msg == null ? '' : o.msg).replace(/\s+/g, ' ').slice(0, MAX_MSG),
       plate: pick(o.plate, PLATES, d.plate),
-      photo: typeof o.photo === 'string' && o.photo.length <= PHOTO_MAX * 1.4 && PHOTO_RE.test(o.photo) ? o.photo : '',
+      photo: typeof o.photo === 'string' && o.photo.length <= PHOTO_LOCAL_MAX && PHOTO_RE.test(o.photo) ? o.photo : '',
+      photoId: typeof o.photoId === 'string' && PID_RE.test(o.photoId) ? o.photoId : '',
       pic: pick(o.pic, PIC_PLACES, d.pic),
       picshape: pick(o.picshape, PIC_SHAPES, d.picshape)
     };
@@ -114,7 +126,7 @@
 
   // ---------- links: ?name=Mia&tiers=3&flavor=chocolate... ----------
   // The photo goes after the # (#p=...), written base64url so chat apps don't mangle it.
-  const LINK_KEYS = ['name', 'tiers', 'shape', 'flavor', 'cream', 'style', 'top', 'candles', 'age', 'num', 'cstyle', 'ccolor', 'msg', 'plate', 'pic', 'picshape'];
+  const LINK_KEYS = ['pid', 'name', 'tiers', 'shape', 'flavor', 'cream', 'style', 'top', 'candles', 'age', 'num', 'cstyle', 'ccolor', 'msg', 'plate', 'pic', 'picshape'];
   const hashPhoto = hash => {
     const m = /(?:^#|&)p=([A-Za-z0-9_-]+)/.exec(hash || '');
     if (!m) return '';
@@ -124,11 +136,29 @@
   function hasCake(p, hash) { return LINK_KEYS.some(k => p.has(k)) || !!hashPhoto(hash); }
   function fromLocation(loc) {
     const c = fromParams(new URLSearchParams(loc.search));
-    c.photo = normalize({ photo: hashPhoto(loc.hash) }).photo;
+    if (!c.photoId) c.photo = normalize({ photo: hashPhoto(loc.hash) }).photo;
     return c;
   }
-  function photoHash(c) {
-    return c.photo ? '#p=' + c.photo.split(',')[1].replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : '';
+  // Only for the fallback: a tiny photo (data URL) carried after the #.
+  function photoHash(tiny) {
+    return tiny ? '#p=' + tiny.split(',')[1].replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : '';
+  }
+  // Upload a JPEG blob; resolves to its new id.
+  async function uploadPhoto(blob) {
+    const bytes = crypto.getRandomValues(new Uint8Array(18));
+    const id = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_') + '.jpg';
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = setTimeout(() => ctrl && ctrl.abort(), 20000);
+    try {
+      const res = await fetch(`${CLOUD.url}/storage/v1/object/${CLOUD.bucket}/${id}`, {
+        method: 'POST',
+        headers: { apikey: CLOUD.key, Authorization: 'Bearer ' + CLOUD.key, 'Content-Type': 'image/jpeg', 'x-upsert': 'false', 'cache-control': '31536000' },
+        body: blob,
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      if (!res.ok) throw new Error('upload failed: ' + res.status);
+      return id;
+    } finally { clearTimeout(timer); }
   }
   function fromParams(p) {
     const o = {};
@@ -137,6 +167,7 @@
     const n = p.get('candles') || p.get('age');      // old links used ?candles= or ?age=
     if (n) o.candles = n;
     if (p.get('num')) { o.num = p.get('num'); o.kind = 'number'; }
+    if (p.get('pid')) o.photoId = p.get('pid');
     return normalize(o);
   }
   function toParams(c) {
@@ -148,7 +179,8 @@
     if (c.kind === 'number' && c.num) p.set('num', c.num); else p.set('candles', c.candles);
     p.set('cstyle', c.cstyle); p.set('ccolor', c.ccolor); p.set('plate', c.plate);
     if (c.msg.trim()) p.set('msg', c.msg.trim());
-    if (c.photo) { p.set('pic', c.pic); p.set('picshape', c.picshape); }
+    if (c.photoId) p.set('pid', c.photoId);
+    if (c.photo || c.photoId) { p.set('pic', c.pic); p.set('picshape', c.picshape); }
     return p.toString().replace(/%2C/g, ',');
   }
 
@@ -356,7 +388,8 @@
 
     // photo: printed on the front of a tier, or a topper on a stick
     let pic = null;
-    if (c.photo && c.pic === 'front') {
+    const hasPhoto = !!photoSrc(c);
+    if (hasPhoto && c.pic === 'front') {
       const ti = msg && c.tiers >= 2 ? 1 : 0, T = tiers[ti];
       let r = Math.min(T.h * 0.4, T.w * 0.16, 50);
       const edge = frontY(T.top, CX);
@@ -471,7 +504,7 @@
 
     // topper on a stick, standing at the back of the top tier (the candles stand in front of it)
     let pad = 0;
-    if (c.photo && c.pic === 'top') {
+    if (hasPhoto && c.pic === 'top') {
       const T = tiers[tiers.length - 1], r = 46, py = T.cy - 150;
       pad = Math.max(0, 10 - (py - r));          // zoom out so a tall cake + topper still fits
       out.push(`<path d="M${CX} ${f1(T.cy - 6)}V${f1(py + r)}" stroke="#7a5a3a" stroke-width="5" stroke-linecap="round"/>` +
@@ -518,14 +551,14 @@
     const bw = Math.max(4, r * 0.16);
     return `<clipPath id="${id}"><path d="${d}"/></clipPath>` +
       `<path d="${d}" fill="${line}" stroke="${line}" stroke-width="${f1(bw + 3)}" stroke-linejoin="round"/>` +
-      `<image href="${c.photo}" x="${f1(x - r * 1.1)}" y="${f1(y - r * 1.1)}" width="${f1(r * 2.2)}" height="${f1(r * 2.2)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` +
+      `<image href="${esc(photoSrc(c))}" x="${f1(x - r * 1.1)}" y="${f1(y - r * 1.1)}" width="${f1(r * 2.2)}" height="${f1(r * 2.2)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` +
       `<path d="${d}" fill="none" stroke="${ring}" stroke-width="${f1(bw)}" stroke-linejoin="round" stroke-dasharray="0.1 ${f1(bw * 1.15)}" stroke-linecap="round"/>` +
       `<path d="${d}" fill="none" stroke="${ring}" stroke-width="${f1(bw * 0.6)}" stroke-linejoin="round"/>`;
   }
 
   window.Cake = {
     FLAVORS, CREAMS, STYLES, SHAPES, TOPPINGS, CANDLE_STYLES, CANDLE_COLORS, PLATES, RAINBOW,
-    PIC_PLACES, PIC_SHAPES, MAX_NAME, MAX_MSG, PHOTO_MAX,
+    PIC_PLACES, PIC_SHAPES, MAX_NAME, MAX_MSG, PHOTO_MAX, photoSrc, uploadPhoto,
     defaults: () => normalize(DEFAULTS),
     normalize, hasCake, fromParams, fromLocation, toParams, photoHash, candleList, render
   };
