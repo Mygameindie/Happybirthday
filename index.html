@@ -10,31 +10,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <canvas id="confetti"></canvas>
 
 <main class="stage">
-  <div>
+  <div class="head">
     <h1 id="title">Happy Birthday!</h1>
     <p class="sub" id="status">Make a wish… then blow!</p>
   </div>
 
   <div class="cake-wrap" id="cake">
-    <div class="plate"></div>
-    <div class="tier bottom">
-      <div class="drips"><span style="height:60%"></span><span style="height:90%"></span><span style="height:55%"></span><span style="height:100%"></span><span style="height:65%"></span><span style="height:85%"></span></div>
-      <div class="dots"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    </div>
-    <div class="tier top">
-      <div class="drips"><span style="height:80%"></span><span style="height:50%"></span><span style="height:95%"></span><span style="height:60%"></span><span style="height:75%"></span></div>
-      <div class="dots"><span></span><span></span><span></span><span></span><span></span></div>
-    </div>
+    <svg class="cake-svg" id="cakeSvg" viewBox="0 0 400 420" aria-hidden="true"></svg>
     <div class="candles" id="candles"></div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="blowPanel">
     <div class="hint" id="hint">
       <svg viewBox="0 0 34 56" aria-hidden="true" id="hintIcon"></svg>
       <span id="hintText">Blow at the bottom of your phone, right at the charger port 🔌</span>
@@ -46,18 +38,56 @@
     </div>
     <div class="row">
       <button id="again" class="hidden">🎂 Light the candles again</button>
+      <button id="editBtn" class="ghost hidden">✏️ Back to baking</button>
     </div>
   </div>
+
+  <section class="builder" id="builder" aria-label="Design the cake">
+    <label class="for-row">🎂 For <input id="bName" type="text" maxlength="30" placeholder="their name" autocomplete="off" enterkeyhint="done"></label>
+    <nav class="tabs scroll-ok" id="bTabs" role="tablist"></nav>
+    <div class="tab-body scroll-ok" id="bBody"></div>
+    <div class="actions">
+      <button id="sendBtn">🎁 Send this cake</button>
+      <button id="blowNowBtn" class="ghost">🌬️ Blow it out now</button>
+    </div>
+  </section>
 </main>
 
-<div class="overlay" id="start">
+<div class="overlay hidden" id="start">
   <h2 id="startTitle">A cake for you!</h2>
   <p id="startText">Allow the microphone, make a wish, and <b>blow into the charger hole</b> at the bottom of your device to blow out the candles.</p>
   <button id="startBtn">🎤 Tap to start</button>
   <p class="small">Your sound never leaves the device — it's only used to hear you blow.</p>
   <button class="ghost" id="noMicBtn">No mic? Tap the candles instead</button>
+  <button class="ghost hidden" id="backBtn">✏️ Back to baking</button>
 </div>
 
-<script src="script.js?v=4"></script>
+<div class="overlay hidden" id="roles">
+  <h2>Happy Birthday! 🎉</h2>
+  <p>Who are you?</p>
+  <div class="role-buttons">
+    <button class="role" id="roleBaker"><span class="role-emoji">👩‍🍳</span><b>I'm the baker</b><small>Design a cake and send it to someone</small></button>
+    <button class="role" id="roleBirthday"><span class="role-emoji">🎂</span><b>It's my birthday</b><small>Make a wish and blow out the candles</small></button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="shareBox" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+  <h2 id="shareTitle">Your cake is ready! 🎁</h2>
+  <p id="shareText">Send this link to the birthday person:</p>
+  <input id="shareLink" type="text" readonly>
+  <p class="small warn hidden" id="shareWarn">This link only works for others once the site is online (https://), for example on GitHub Pages.</p>
+  <div class="row">
+    <button id="copyBtn">📋 Copy link</button>
+    <button id="nativeShareBtn" class="hidden">📤 Share…</button>
+  </div>
+  <a class="ghost-link" id="openLink" target="_blank" rel="noopener">👀 Open it like they will</a>
+  <button class="ghost" id="shareClose">Keep baking</button>
+</div>
+
+<div class="toast hidden" id="toast" role="status"></div>
+
+<script src="cake.js?v=5"></script>
+<script src="script.js?v=5"></script>
+<script src="builder.js?v=5"></script>
 </body>
 </html>
