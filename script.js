@@ -2,7 +2,7 @@
   'use strict';
 
   // ---------- the cake: from the link (?name=Mia&tiers=3...) or from the builder ----------
-  let cfg = Cake.fromParams(new URLSearchParams(location.search));
+  let cfg = Cake.fromLocation(location);
   let mode = 'idle';   // 'build' = designing (no blowing), 'blow' = birthday time
 
   const $ = id => document.getElementById(id);

@@ -269,6 +269,17 @@ button.chip:active { transform: scale(.96); box-shadow: none; }
 button.chip[aria-pressed="true"] { background: rgba(255,207,90,.2); border-color: var(--accent); }
 .chip .sw { width: 20px; height: 20px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,.25); }
 .chip .em { font-size: 16px; line-height: 1; }
+.sub-h { margin-top: 10px !important; }
+label.photo-add {
+  display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  padding: 14px; border-radius: 16px; border: 2px dashed rgba(255,207,90,.6);
+  background: rgba(255,207,90,.08); color: var(--accent); font-weight: 800; font-size: 16px;
+}
+label.photo-add .em { font-size: 22px; }
+label.photo-add:active { transform: scale(.98); }
+.photo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.photo-thumb { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; border: 2px solid var(--accent); }
+label.chip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: 800 14px "Nunito", sans-serif; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.1); color: var(--text); border: 2px solid transparent; }
 .note { margin: 6px 0 0; font-size: 13px; color: var(--muted); opacity: .85; }
 .num-in { max-width: 140px; font-size: 22px; text-align: center; }
 

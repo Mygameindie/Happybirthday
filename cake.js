@@ -62,10 +62,23 @@
     blue:  { label: 'Blue',  a: '#d8edff', b: '#7fa6d6' }
   };
 
+  const PIC_PLACES = {
+    front: { label: 'Printed on the front', emoji: '🖼️' },
+    top:   { label: 'Topper on a stick',    emoji: '🪧' }
+  };
+  const PIC_SHAPES = {
+    circle: { label: 'Circle', emoji: '⚪' },
+    heart:  { label: 'Heart',  emoji: '❤️' },
+    square: { label: 'Square', emoji: '⬜' }
+  };
+  // The photo travels inside the link, so it is kept tiny (chat apps cut very long links).
+  const PHOTO_MAX = 4200;
+  const PHOTO_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/;
+
   const DEFAULTS = {
     name: '', tiers: 2, shape: 'round', flavor: 'strawberry', cream: 'white', style: 'drips',
     top: ['sprinkles'], kind: 'count', candles: 5, num: '', cstyle: 'striped', ccolor: 'rainbow',
-    msg: '', plate: 'white'
+    msg: '', plate: 'white', photo: '', pic: 'front', picshape: 'circle'
   };
   const MAX_NAME = 30, MAX_MSG = 24;
 
@@ -92,16 +105,34 @@
       cstyle: pick(o.cstyle, CANDLE_STYLES, d.cstyle),
       ccolor: pick(o.ccolor, CANDLE_COLORS, d.ccolor),
       msg: String(o.msg == null ? '' : o.msg).replace(/\s+/g, ' ').slice(0, MAX_MSG),
-      plate: pick(o.plate, PLATES, d.plate)
+      plate: pick(o.plate, PLATES, d.plate),
+      photo: typeof o.photo === 'string' && o.photo.length <= PHOTO_MAX * 1.4 && PHOTO_RE.test(o.photo) ? o.photo : '',
+      pic: pick(o.pic, PIC_PLACES, d.pic),
+      picshape: pick(o.picshape, PIC_SHAPES, d.picshape)
     };
   }
 
   // ---------- links: ?name=Mia&tiers=3&flavor=chocolate... ----------
-  const LINK_KEYS = ['name', 'tiers', 'shape', 'flavor', 'cream', 'style', 'top', 'candles', 'age', 'num', 'cstyle', 'ccolor', 'msg', 'plate'];
-  function hasCake(p) { return LINK_KEYS.some(k => p.has(k)); }
+  // The photo goes after the # (#p=...), written base64url so chat apps don't mangle it.
+  const LINK_KEYS = ['name', 'tiers', 'shape', 'flavor', 'cream', 'style', 'top', 'candles', 'age', 'num', 'cstyle', 'ccolor', 'msg', 'plate', 'pic', 'picshape'];
+  const hashPhoto = hash => {
+    const m = /(?:^#|&)p=([A-Za-z0-9_-]+)/.exec(hash || '');
+    if (!m) return '';
+    const b = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    return 'data:image/jpeg;base64,' + b + '='.repeat((4 - b.length % 4) % 4);
+  };
+  function hasCake(p, hash) { return LINK_KEYS.some(k => p.has(k)) || !!hashPhoto(hash); }
+  function fromLocation(loc) {
+    const c = fromParams(new URLSearchParams(loc.search));
+    c.photo = normalize({ photo: hashPhoto(loc.hash) }).photo;
+    return c;
+  }
+  function photoHash(c) {
+    return c.photo ? '#p=' + c.photo.split(',')[1].replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : '';
+  }
   function fromParams(p) {
     const o = {};
-    for (const k of ['name', 'tiers', 'shape', 'flavor', 'cream', 'style', 'cstyle', 'ccolor', 'msg', 'plate']) if (p.has(k)) o[k] = p.get(k);
+    for (const k of ['name', 'tiers', 'shape', 'flavor', 'cream', 'style', 'cstyle', 'ccolor', 'msg', 'plate', 'pic', 'picshape']) if (p.has(k)) o[k] = p.get(k);
     if (p.has('top')) o.top = p.get('top') === 'none' ? [] : p.get('top').split(',');
     const n = p.get('candles') || p.get('age');      // old links used ?candles= or ?age=
     if (n) o.candles = n;
@@ -117,6 +148,7 @@
     if (c.kind === 'number' && c.num) p.set('num', c.num); else p.set('candles', c.candles);
     p.set('cstyle', c.cstyle); p.set('ccolor', c.ccolor); p.set('plate', c.plate);
     if (c.msg.trim()) p.set('msg', c.msg.trim());
+    if (c.photo) { p.set('pic', c.pic); p.set('picshape', c.picshape); }
     return p.toString().replace(/%2C/g, ',');
   }
 
@@ -319,7 +351,24 @@
       // follow the front edge across the whole word (a heart dips in the middle)
       const edge = (frontY(T.top, CX - half * 0.7) + frontY(T.top, CX) + frontY(T.top, CX + half * 0.7)) / 3;
       const ty = edge + T.h * (c.style === 'drips' ? 0.62 : 0.55);
-      msgBox = { y: ty, fs, half };
+      msgBox = { y: ty, fs, half, edge };
+    }
+
+    // photo: printed on the front of a tier, or a topper on a stick
+    let pic = null;
+    if (c.photo && c.pic === 'front') {
+      const ti = msg && c.tiers >= 2 ? 1 : 0, T = tiers[ti];
+      let r = Math.min(T.h * 0.4, T.w * 0.16, 50);
+      const edge = frontY(T.top, CX);
+      let y = edge + T.h * (c.style === 'drips' ? 0.58 : 0.54);
+      if (msg && ti === 0) {                     // one tier: photo above, message below
+        r = Math.min(r, T.h * 0.27);
+        y = edge + T.h * (c.style === 'drips' ? 0.4 : 0.35);
+        msgBox.fs = Math.min(msgBox.fs, T.h * 0.19);
+        msgBox.half = Math.min(T.w * 0.45, msg.length * msgBox.fs * 0.27 + 8);
+        msgBox.y = msgBox.edge + T.h * 0.8;
+      }
+      pic = { tier: ti, x: CX, y, r };
     }
 
     const fronts = [];
@@ -373,6 +422,7 @@
         const y = fx + creamTop + r() * Math.max(1, h - creamTop - bottomGap - 4);
         const a = Math.round(r() * 180), col = SPRINKLES[Math.floor(r() * SPRINKLES.length)];
         if (i === 0 && msgBox && Math.abs(y - msgBox.y) < msgBox.fs * 0.62 && Math.abs(x - CX) < msgBox.half) continue;
+        if (pic && pic.tier === i && Math.hypot(x - pic.x, y - pic.y) < pic.r + 6) continue;
         out.push(kind === 's'
           ? `<rect x="-3.6" y="-1.3" width="7.2" height="2.6" rx="1.3" fill="${col}" transform="translate(${f1(x)} ${f1(y)}) rotate(${a})"/>`
           : star(x, y, 4.5 + r() * 2.5, '#ffd75e', '#c98a12'));
@@ -393,6 +443,8 @@
         out.push(`<text x="${CX}" y="${f1(msgBox.y)}" font-family="Pacifico, cursive" font-size="${f1(msgBox.fs)}" text-anchor="middle" dominant-baseline="middle" ` +
           `fill="${fill}" stroke="${line}" stroke-width="${f1(msgBox.fs * 0.1)}" stroke-linejoin="round" paint-order="stroke">${esc(msg)}</text>`);
       }
+
+      if (pic && pic.tier === i) out.push(photo(pic.x, pic.y, pic.r, c, cream, creamLine));
 
       // top of the cake
       out.push(`<path d="${pathOf(top)}" fill="url(#ckTop)" stroke="${creamLine}" stroke-width="2" stroke-linejoin="round"/>`);
@@ -417,23 +469,64 @@
     });
     for (let i = fronts.length - 1; i >= 0; i--) out.push(fronts[i]);
 
+    // topper on a stick, standing at the back of the top tier (the candles stand in front of it)
+    let pad = 0;
+    if (c.photo && c.pic === 'top') {
+      const T = tiers[tiers.length - 1], r = 46, py = T.cy - 150;
+      pad = Math.max(0, 10 - (py - r));          // zoom out so a tall cake + topper still fits
+      out.push(`<path d="M${CX} ${f1(T.cy - 6)}V${f1(py + r)}" stroke="#7a5a3a" stroke-width="5" stroke-linecap="round"/>` +
+        `<path d="M${CX} ${f1(T.cy - 6)}V${f1(py + r)}" stroke="#f1dcb4" stroke-width="2.5" stroke-linecap="round"/>` +
+        photo(CX, py, r, c, '#ffffff', mix(cream, INK, 0.45)));
+    }
+
     svg.innerHTML = out.join('');
+    const vh = 420 + pad, vw = vh / 1.05, vx = CX - vw / 2;
+    svg.setAttribute('viewBox', `${f1(vx)} ${f1(-pad)} ${f1(vw)} ${f1(vh)}`);
 
     // where the candles stand: on the middle of the top tier
     const T = tiers[tiers.length - 1];
     const bw = Math.min(T.w * 0.88, Math.max(T.w * 0.68, candleList(c).length * 19));
     return {
-      left: f1((CX - bw / 2) / 4) + '%',
-      width: f1(bw / 4) + '%',
-      bottom: f1((420 - T.cy) / 4.2) + '%',
-      height: f1(120 / 4.2) + '%'
+      left: f1((CX - bw / 2 - vx) / vw * 100) + '%',
+      width: f1(bw / vw * 100) + '%',
+      bottom: f1((420 - T.cy) / vh * 100) + '%',
+      height: f1(120 / vh * 100) + '%'
     };
+  }
+
+  // A picture in a frame of piped cream.
+  function framePath(shape, x, y, r) {
+    if (shape === 'square') {
+      const k = r * 0.9, rr = r * 0.22;
+      return `M${f1(x - k + rr)} ${f1(y - k)}H${f1(x + k - rr)}Q${f1(x + k)} ${f1(y - k)} ${f1(x + k)} ${f1(y - k + rr)}V${f1(y + k - rr)}` +
+        `Q${f1(x + k)} ${f1(y + k)} ${f1(x + k - rr)} ${f1(y + k)}H${f1(x - k + rr)}Q${f1(x - k)} ${f1(y + k)} ${f1(x - k)} ${f1(y + k - rr)}` +
+        `V${f1(y - k + rr)}Q${f1(x - k)} ${f1(y - k)} ${f1(x - k + rr)} ${f1(y - k)}Z`;
+    }
+    if (shape === 'heart') {
+      const pts = [];
+      for (let i = 0; i < 60; i++) {
+        const t = i / 60 * Math.PI * 2;
+        pts.push([x + 16 * Math.sin(t) ** 3 / 16 * r * 1.08, y - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 16 * r * 1.08 - r * 0.12]);
+      }
+      return pathOf(pts);
+    }
+    return `M${f1(x - r)} ${f1(y)}a${f1(r)} ${f1(r)} 0 1 0 ${f1(2 * r)} 0a${f1(r)} ${f1(r)} 0 1 0 ${f1(-2 * r)} 0Z`;
+  }
+  let picId = 0;
+  function photo(x, y, r, c, ring, line) {
+    const d = framePath(c.picshape, x, y, r), id = 'ckPic' + (++picId);
+    const bw = Math.max(4, r * 0.16);
+    return `<clipPath id="${id}"><path d="${d}"/></clipPath>` +
+      `<path d="${d}" fill="${line}" stroke="${line}" stroke-width="${f1(bw + 3)}" stroke-linejoin="round"/>` +
+      `<image href="${c.photo}" x="${f1(x - r * 1.1)}" y="${f1(y - r * 1.1)}" width="${f1(r * 2.2)}" height="${f1(r * 2.2)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` +
+      `<path d="${d}" fill="none" stroke="${ring}" stroke-width="${f1(bw)}" stroke-linejoin="round" stroke-dasharray="0.1 ${f1(bw * 1.15)}" stroke-linecap="round"/>` +
+      `<path d="${d}" fill="none" stroke="${ring}" stroke-width="${f1(bw * 0.6)}" stroke-linejoin="round"/>`;
   }
 
   window.Cake = {
     FLAVORS, CREAMS, STYLES, SHAPES, TOPPINGS, CANDLE_STYLES, CANDLE_COLORS, PLATES, RAINBOW,
-    MAX_NAME, MAX_MSG,
+    PIC_PLACES, PIC_SHAPES, MAX_NAME, MAX_MSG, PHOTO_MAX,
     defaults: () => normalize(DEFAULTS),
-    normalize, hasCake, fromParams, toParams, candleList, render
+    normalize, hasCake, fromParams, fromLocation, toParams, photoHash, candleList, render
   };
 })();

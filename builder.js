@@ -35,7 +35,8 @@
       { key: 'style', title: 'Cream style', options: opts(C.STYLES) }
     ] },
     { id: 'top', label: '🍓 Toppings', groups: [
-      { key: 'top', title: 'Pick as many as you like', multi: true, options: opts(C.TOPPINGS) }
+      { key: 'top', title: 'Pick as many as you like', multi: true, options: opts(C.TOPPINGS) },
+      { special: 'photo' }
     ] },
     { id: 'candles', label: '🕯️ Candles', groups: [
       { key: 'kind', title: 'Kind', options: [{ v: 'count', label: 'Candles', emoji: '🕯️' }, { v: 'number', label: 'Number candles', emoji: '🔢' }] },
@@ -85,6 +86,20 @@
           : `<div class="group"><h3>How many</h3><div class="stepper"><button type="button" class="step" data-step="-1" aria-label="Fewer candles">−</button>` +
             `<output id="bCount">${cfg.candles}</output><button type="button" class="step" data-step="1" aria-label="More candles">+</button></div></div>`;
       }
+      if (g.special === 'photo') {
+        if (!cfg.photo) {
+          return `<div class="group photo-group"><h3>Photo on the cake</h3>` +
+            `<label class="photo-add"><input type="file" id="bPhoto" accept="image/*" hidden><span class="em">📷</span>Add a photo</label>` +
+            `<p class="note">A face, a pet, a memory… it goes on the cake like an edible print.</p></div>`;
+        }
+        return `<div class="group photo-group"><h3>Photo on the cake</h3>` +
+          `<div class="photo-row"><img class="photo-thumb" src="${cfg.photo}" alt="Your photo">` +
+          `<label class="chip"><input type="file" id="bPhoto" accept="image/*" hidden>🔄 Change</label>` +
+          `<button type="button" class="chip" id="bPhotoDel">🗑️ Remove</button></div>` +
+          `<h3 class="sub-h">Where</h3><div class="chips">${opts(C.PIC_PLACES).map(o => chipHTML('pic', o)).join('')}</div>` +
+          `<h3 class="sub-h">Frame</h3><div class="chips">${opts(C.PIC_SHAPES).map(o => chipHTML('picshape', o)).join('')}</div>` +
+          `<p class="note">The photo travels inside the link, so it's made small.</p></div>`;
+      }
       if (g.special === 'msg') {
         return `<div class="group"><h3>Message on the cake</h3><input class="text-in" id="bMsg" type="text" maxlength="${C.MAX_MSG}" placeholder="e.g. Love you! 💕" value="${esc(cfg.msg)}" autocomplete="off" enterkeyhint="done">` +
           `<p class="note"><span id="bMsgCount">${cfg.msg.length}</span>/${C.MAX_MSG} · piped onto the front of the cake</p>` +
@@ -113,6 +128,52 @@
       update();
     }
   });
+  // ---------- photo: crop to a square and shrink it so it fits in a link ----------
+  function loadImage(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); res(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('not an image')); };
+      img.src = url;
+    });
+  }
+  async function shrinkPhoto(file) {
+    const img = await loadImage(file);
+    const w = img.naturalWidth, h = img.naturalHeight, side = Math.min(w, h);
+    const sx = (w - side) / 2, sy = (h - side) * 0.3;     // tall photos: keep the top part, where faces usually are
+    let best = '';
+    for (const size of [144, 128, 112, 96, 80]) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      for (const q of [0.72, 0.6, 0.5, 0.4]) {
+        const d = cv.toDataURL('image/jpeg', q);
+        best = d;
+        if (d.length - 23 <= C.PHOTO_MAX) return d;
+      }
+    }
+    return best;
+  }
+  bodyEl.addEventListener('change', async e => {
+    if (e.target.id !== 'bPhoto' || !e.target.files || !e.target.files[0]) return;
+    try {
+      const d = await shrinkPhoto(e.target.files[0]);
+      cfg.photo = d;
+      if (!C.normalize({ photo: d }).photo) throw new Error('too big');
+      update(); renderBody();
+      toast('📷 Photo added!');
+    } catch (err) {
+      console.warn(err);
+      toast('Couldn\'t use that picture. Try another one.');
+    }
+  });
+  bodyEl.addEventListener('click', e => {
+    if (e.target.closest('#bPhotoDel')) { cfg.photo = ''; update(); renderBody(); }
+  });
+
   bodyEl.addEventListener('input', e => {
     if (e.target.id === 'bNum') {
       const v = e.target.value.replace(/\D/g, '').slice(0, 3);
@@ -152,7 +213,7 @@
   $('backBtn').addEventListener('click', enterBuild);
 
   // ---------- sending ----------
-  function shareUrl() { return location.href.split(/[?#]/)[0] + '?' + C.toParams(App.cake); }
+  function shareUrl() { return location.href.split(/[?#]/)[0] + '?' + C.toParams(App.cake) + C.photoHash(App.cake); }
   function shareText() {
     const n = App.cake.name;
     return n ? `🎂 I baked you a birthday cake, ${n}! Open it, make a wish and blow out the candles:` : '🎂 I baked you a birthday cake! Open it, make a wish and blow out the candles:';
@@ -194,8 +255,8 @@
   addEventListener('keydown', e => { if (e.key === 'Escape') $('shareBox').classList.add('hidden'); });
 
   // ---------- first screen ----------
-  if (C.hasCake(params)) {
-    blowNow(C.fromParams(params), false);       // opened a cake someone sent: straight to blowing
+  if (C.hasCake(params, location.hash)) {
+    blowNow(C.fromLocation(location), false);       // opened a cake someone sent: straight to blowing
   } else {
     App.setCake(cfg);
     $('roles').classList.remove('hidden');

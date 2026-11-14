@@ -21,12 +21,16 @@ The baker's last design is remembered on their device.
 - **Cake:** 1–3 tiers · round, square or heart · vanilla, chocolate, strawberry, red velvet, matcha, ube · plate color
 - **Cream:** 7 colors · drips, layered, swirls or rosettes
 - **Toppings** (as many as you like): sprinkles, stars, strawberries, cherries, macarons, chocolate
+- **Photo:** add your own picture, printed on the front of the cake (like an edible photo print) or as a topper on a stick · circle, heart or square frame
 - **Candles:** 1–12 candles, or number candles for an age like "25" · striped, plain or sparkle · rainbow or one color
 - **Words:** the name in the title, plus a short message piped on the cake
 
 Everything lives in the link, for example
 `index.html?name=Mia&tiers=3&shape=heart&flavor=ube&cream=pink&style=swirls&top=strawberries&num=7&msg=Love+you`.
 Old links like `?name=Mia&candles=7` still work.
+
+A photo also travels inside the link (after the `#`). To keep the link short enough for chat apps, the picture is cropped
+to a square and made small (about 3 KB), so it looks best as a face or a pet close-up.
 
 ## Hosting
 
