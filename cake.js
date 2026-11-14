@@ -368,40 +368,66 @@
       '<radialGradient id="ckShadow"><stop offset=".55" stop-color="#000" stop-opacity=".45"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>' +
       '</defs>');
 
-    // plate
-    out.push(`<ellipse cx="200" cy="404" rx="240" ry="30" fill="url(#ckShadow)"/>` +
-      `<ellipse cx="200" cy="394" rx="226" ry="22" fill="url(#ckPlate)" stroke="${mix(plate.b, INK, 0.3)}" stroke-width="2"/>` +
-      `<ellipse cx="200" cy="391" rx="204" ry="15" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>`);
-
-    // the message goes on the front of the bottom tier
-    const msg = c.msg.trim();
-    let msgBox = null;
-    if (msg) {
-      const T = tiers[0];
-      const fs = Math.min(T.h * 0.36, (T.w * 0.8) / (Math.max(4, msg.length) * 0.5));
-      const half = Math.min(T.w * 0.45, msg.length * fs * 0.27 + 8);
-      // follow the front edge across the whole word (a heart dips in the middle)
-      const edge = (frontY(T.top, CX - half * 0.7) + frontY(T.top, CX) + frontY(T.top, CX + half * 0.7)) / 3;
-      const ty = edge + T.h * (c.style === 'drips' ? 0.62 : 0.55);
-      msgBox = { y: ty, fs, half, edge };
+    // plate: sized to the bottom tier's footprint, so every shape (a deep heart too) sits on it
+    {
+      const fb = bounds(outline(c.shape, CX, tiers[0].by, tiers[0].w));
+      const pcy = (fb.y0 + fb.y1) / 2, half = (fb.y1 - fb.y0) / 2;
+      const prx = (fb.x1 - fb.x0) / 2 * 1.12 + 14, pry = half * 1.12 + 12;
+      out.push(`<ellipse cx="${CX}" cy="${f1(pcy + 12)}" rx="${f1(prx + 16)}" ry="${f1(pry + 10)}" fill="url(#ckShadow)"/>` +
+        `<ellipse cx="${CX}" cy="${f1(pcy)}" rx="${f1(prx)}" ry="${f1(pry)}" fill="url(#ckPlate)" stroke="${mix(plate.b, INK, 0.3)}" stroke-width="2"/>` +
+        `<ellipse cx="${CX}" cy="${f1(pcy - 2)}" rx="${f1(prx - 20)}" ry="${f1(pry - 20 * pry / prx)}" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>`);
     }
 
-    // photo: printed on the front of a tier, or a topper on a stick
-    let pic = null;
-    const hasPhoto = !!photoSrc(c);
-    if (hasPhoto && c.pic === 'front') {
-      const ti = msg && c.tiers >= 2 ? 1 : 0, T = tiers[ti];
-      let r = Math.min(T.h * 0.4, T.w * 0.16, 50);
-      const edge = frontY(T.top, CX);
-      let y = edge + T.h * (c.style === 'drips' ? 0.58 : 0.54);
-      if (msg && ti === 0) {                     // one tier: photo above, message below
-        r = Math.min(r, T.h * 0.27);
-        y = edge + T.h * (c.style === 'drips' ? 0.4 : 0.35);
-        msgBox.fs = Math.min(msgBox.fs, T.h * 0.19);
-        msgBox.half = Math.min(T.w * 0.45, msg.length * msgBox.fs * 0.27 + 8);
-        msgBox.y = msgBox.edge + T.h * 0.8;
+    // Space on the front of a tier: the side runs from frontY(x) down to frontY(x) + h.
+    // A heart narrows to a point, so check across the whole width of what we place there.
+    const sideGap = T => (c.style === 'swirls' || c.style === 'rosettes' ? Math.max(8, Math.min(15, T.w * 0.045)) * 0.9 + 3 : 5);
+    const edgeAvg = (T, half) => (frontY(T.top, CX - half * 0.7) + frontY(T.top, CX) + frontY(T.top, CX + half * 0.7)) / 3;
+    function fitText(T, text, fsMax, prefAt, yMax) {
+      for (let fs = fsMax; fs >= 9; fs *= 0.93) {
+        const half = Math.min(T.w * 0.45, text.length * fs * 0.27 + 8);
+        let lo = -Infinity, hi = Math.min(Infinity, yMax - fs * 0.45);
+        for (let k = -4; k <= 4; k++) {
+          const f = frontY(T.top, CX + half * k / 4);
+          if (f == null) { lo = Infinity; break; }
+          lo = Math.max(lo, f + 4 + fs * 0.52);
+          hi = Math.min(hi, f + T.h - sideGap(T) - fs * 0.45);
+        }
+        if (lo <= hi) return { fs, half, y: Math.min(hi, Math.max(lo, edgeAvg(T, half) + T.h * prefAt)) };
       }
-      pic = { tier: ti, x: CX, y, r };
+      return null;
+    }
+    function fitPhoto(T, rMax, prefAt, yMax) {
+      for (let r = rMax; r >= 12; r -= 1) {
+        const R = r * 1.16;                       // the picture plus its cream frame
+        let lo = -Infinity, hi = yMax - R;
+        for (let k = -8; k <= 8; k++) {
+          const dx = R * k / 8, f = frontY(T.top, CX + dx);
+          if (f == null) { lo = Infinity; break; }
+          const v = Math.sqrt(Math.max(0, R * R - dx * dx));
+          lo = Math.max(lo, f + 3 + v);
+          hi = Math.min(hi, f + T.h - sideGap(T) - v);
+        }
+        if (lo <= hi) return { x: CX, r, y: Math.min(hi, Math.max(lo, edgeAvg(T, R) + T.h * prefAt)) };
+      }
+      return null;
+    }
+
+    // the message goes on the front of the bottom tier, a front photo on the tier above it (or above the words on one tier)
+    const msg = c.msg.trim();
+    const hasPhoto = !!photoSrc(c);
+    const frontPhoto = hasPhoto && c.pic === 'front';
+    const shareTier = frontPhoto && msg && c.tiers === 1;
+    let msgBox = null, pic = null;
+    if (msg) {
+      const T = tiers[0];
+      const fsMax = Math.min(T.h * (shareTier ? 0.2 : 0.36), (T.w * 0.8) / (Math.max(4, msg.length) * 0.5));
+      msgBox = fitText(T, msg, fsMax, shareTier ? 0.85 : (c.style === 'drips' ? 0.62 : 0.55), Infinity);
+    }
+    if (frontPhoto) {
+      const ti = msg && c.tiers >= 2 ? 1 : 0, T = tiers[ti];
+      const yMax = shareTier && msgBox ? msgBox.y - msgBox.fs * 0.55 - 3 : Infinity;
+      const p = fitPhoto(T, Math.min(T.h * 0.4, T.w * 0.16, 50), shareTier ? 0.35 : 0.55, yMax);
+      if (p) pic = Object.assign(p, { tier: ti });
     }
 
     const fronts = [];
